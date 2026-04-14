@@ -15,12 +15,16 @@ export default function Admin() {
   });
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
   async function createShipment() {
     setLoading(true);
+    setErrorMsg("");
     const { error } = await supabase.from("shipments").insert([form]);
     setLoading(false);
-    if (!error) {
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
       setSuccess(true);
       setForm({
         tracking_number: "",
@@ -73,7 +77,8 @@ export default function Admin() {
           {loading ? "Creating..." : "Create Shipment"}
         </button>
 
-        {success && <p style={{ color: "#22c55e", marginTop: "16px", textAlign: "center" }}>✅ Shipment created successfully!</p>}
+        {errorMsg && <p style={{ color: "#ef4444", marginTop: "16px" }}>{errorMsg}</p>}
+        {success && <p style={{ color: "#22c55e", marginTop: "16px", textAlign: "center" }}>✅ Shipment created!</p>}
       </div>
     </main>
   );
