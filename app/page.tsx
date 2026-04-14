@@ -1,6 +1,11 @@
 "use client";
 import { useState, useEffect } from "react";
-import { supabase } from "../lib/supabase";
+import { createClient } from "@supabase/supabase-js";
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 const STATUS_CONFIG: any = {
   "Label Created":       { pct: 8,   color: "#888780", emoji: "📋" },
@@ -49,6 +54,8 @@ export default function Home() {
 
   const status = result?.current_status || result?.status || "Label Created";
   const cfg = STATUS_CONFIG[status] || { pct: 0, color: "#888780", emoji: "📋" };
+  const isAir = ["Overnight", "Express"].includes(result?.service_type);
+  const vehicle = isAir ? "✈️" : "🚚";
 
   const s: any = {
     body: { background: "#060605", minHeight: "100vh", color: "#eeede6", fontFamily: "'DM Sans', sans-serif", overflowX: "hidden", position: "relative" },
@@ -93,6 +100,8 @@ export default function Home() {
         @keyframes scan { 0% { top:-2px; } 100% { top:100vh; } }
         @keyframes rain { 0% { transform:translateY(-120px); opacity:0; } 10% { opacity:1; } 90% { opacity:0.5; } 100% { transform:translateY(110vh); opacity:0; } }
         @keyframes livePulse { 0%,100% { box-shadow:0 0 0 0 rgba(34,197,94,0.5); } 50% { box-shadow:0 0 0 4px rgba(34,197,94,0); } }
+        @keyframes vehicleMove { 0%,100% { transform: translateY(-2px); } 50% { transform: translateY(2px); } }
+        @keyframes dash { to { stroke-dashoffset: -20; } }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         input::placeholder { color: #333; font-size: 13px; }
         input:focus { outline: none; }
@@ -180,6 +189,74 @@ export default function Home() {
             </div>
           </div>
 
+          {/* MAP CARD */}
+          <div style={s.card}>
+            <div style={s.cardLabel}>Live Route Map</div>
+            <div style={{ position: "relative", background: "#060605", borderRadius: 12, padding: "24px 20px", border: "1px solid #1a1a17", overflow: "hidden" }}>
+              
+              {/* MAP GRID */}
+              <div style={{ position: "absolute", inset: 0, backgroundImage: "linear-gradient(#1a1a17 1px,transparent 1px),linear-gradient(90deg,#1a1a17 1px,transparent 1px)", backgroundSize: "24px 24px", opacity: 0.6 }} />
+              
+              {/* MAP GLOW */}
+              <div style={{ position: "absolute", top: "50%", left: cfg.pct + "%", transform: "translate(-50%,-50%)", width: 120, height: 120, background: "radial-gradient(circle,rgba(249,115,22,0.15) 0%,transparent 70%)", pointerEvents: "none", transition: "left 1s ease" }} />
+
+              <div style={{ position: "relative", zIndex: 2 }}>
+                {/* CITY LABELS */}
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "#f97316" }}>{result.origin || "Origin"}</div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "#22c55e" }}>{result.destination || "Destination"}</div>
+                </div>
+
+                {/* ROUTE LINE WITH VEHICLE */}
+                <div style={{ position: "relative", height: 60, display: "flex", alignItems: "center" }}>
+                  
+                  {/* DASHED BACKGROUND LINE */}
+                  <svg style={{ position: "absolute", width: "100%", height: 20, top: "50%", transform: "translateY(-50%)" }} viewBox="0 0 400 20" preserveAspectRatio="none">
+                    <line x1="0" y1="10" x2="400" y2="10" stroke="#1a1a17" strokeWidth="2" strokeDasharray="8,6" />
+                  </svg>
+
+                  {/* PROGRESS LINE */}
+                  <div style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)", height: 2, width: cfg.pct + "%", background: `linear-gradient(90deg, #f97316, ${cfg.color})`, borderRadius: 99, transition: "width 1s ease", boxShadow: `0 0 8px ${cfg.color}60` }} />
+
+                  {/* ORIGIN DOT */}
+                  <div style={{ position: "absolute", left: 0, top: "50%", transform: "translate(-50%,-50%)", width: 12, height: 12, borderRadius: "50%", background: "#f97316", boxShadow: "0 0 10px rgba(249,115,22,0.6)", zIndex: 3 }} />
+
+                  {/* DESTINATION DOT */}
+                  <div style={{ position: "absolute", right: 0, top: "50%", transform: "translate(50%,-50%)", width: 12, height: 12, borderRadius: "50%", background: status === "Delivered" ? "#22c55e" : "#333", border: "2px solid #22c55e", boxShadow: status === "Delivered" ? "0 0 10px rgba(34,197,94,0.6)" : "none", zIndex: 3, transition: "all 0.5s ease" }} />
+
+                  {/* VEHICLE */}
+                  <div style={{ position: "absolute", left: `calc(${Math.min(cfg.pct, 95)}% - 16px)`, top: "50%", transform: "translateY(-60%)", fontSize: 24, zIndex: 4, transition: "left 1s ease", animation: "vehicleMove 2s ease-in-out infinite", filter: `drop-shadow(0 0 6px ${cfg.color})` }}>
+                    {vehicle}
+                  </div>
+                </div>
+
+                {/* PROGRESS % */}
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
+                  <div style={{ fontSize: 9, color: "#333" }}>0%</div>
+                  <div style={{ fontSize: 10, color: cfg.color, fontWeight: 600 }}>{cfg.pct}% complete</div>
+                  <div style={{ fontSize: 9, color: "#333" }}>100%</div>
+                </div>
+
+                {/* CHECKPOINTS */}
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16, paddingTop: 16, borderTop: "1px solid #1a1a17" }}>
+                  {[
+                    { label: "Label Created", pct: 8 },
+                    { label: "Picked Up", pct: 22 },
+                    { label: "In Transit", pct: 45 },
+                    { label: "At Facility", pct: 62 },
+                    { label: "Out for Delivery", pct: 90 },
+                    { label: "Delivered", pct: 100 },
+                  ].map(cp => (
+                    <div key={cp.label} style={{ textAlign: "center", flex: 1 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: "50%", margin: "0 auto 4px", background: cfg.pct >= cp.pct ? cfg.color : "#1a1a17", border: `1px solid ${cfg.pct >= cp.pct ? cfg.color : "#333"}`, transition: "all 0.5s ease" }} />
+                      <div style={{ fontSize: 7, color: cfg.pct >= cp.pct ? "#888" : "#333", lineHeight: 1.2 }}>{cp.label.split(" ")[0]}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* ROUTE */}
           <div style={s.card}>
             <div style={s.cardLabel}>Route</div>
@@ -193,7 +270,7 @@ export default function Home() {
                 <div style={{ height: 2, background: "#1a1a17", borderRadius: 99, overflow: "hidden" }}>
                   <div style={{ height: "100%", width: cfg.pct + "%", background: "#f97316" }} />
                 </div>
-                <div style={{ textAlign: "center", fontSize: 16, marginTop: -9 }}>✈</div>
+                <div style={{ textAlign: "center", fontSize: 16, marginTop: -9 }}>{vehicle}</div>
               </div>
               <div style={{ flex: 1, minWidth: 0, textAlign: "right" }}>
                 <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#22c55e", marginBottom: 6, marginLeft: "auto" }} />
