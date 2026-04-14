@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { supabase } from "../lib/supabase";
+import { supabase } from "@/lib/supabase";
 
 const STATUS_CONFIG: any = {
   "Label Created":       { pct: 8,   color: "#888780", emoji: "📋" },
