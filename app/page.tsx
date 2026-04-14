@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -18,35 +18,120 @@ const STATUS_CONFIG: any = {
   "Exception":           { pct: 50,  color: "#dc2626", emoji: "⚠️" },
 };
 
+declare global { interface Window { google: any; initMap: any; } }
+
 export default function Home() {
   const [tracking, setTracking] = useState("");
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(false);
   const [drops, setDrops] = useState<any[]>([]);
+  const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<any>(null);
 
   useEffect(() => {
     const arr = Array.from({ length: 30 }, (_, i) => ({
-      id: i,
-      left: Math.random() * 100,
-      height: 50 + Math.random() * 80,
-      duration: 1.5 + Math.random() * 2.5,
-      delay: Math.random() * 4,
-      opacity: 0.2 + Math.random() * 0.3,
+      id: i, left: Math.random() * 100, height: 50 + Math.random() * 80,
+      duration: 1.5 + Math.random() * 2.5, delay: Math.random() * 4, opacity: 0.2 + Math.random() * 0.3,
     }));
     setDrops(arr);
   }, []);
+
+  useEffect(() => {
+    if (!result || !mapRef.current) return;
+    const origin = result.origin || "Los Angeles";
+    const destination = result.destination || "New York";
+    const isAir = ["Overnight", "Express"].includes(result.service_type);
+
+    const loadMap = () => {
+      const geocoder = new window.google.maps.Geocoder();
+      const map = new window.google.maps.Map(mapRef.current, {
+        zoom: 4,
+        center: { lat: 39.5, lng: -98.35 },
+        styles: [
+          { elementType: "geometry", stylers: [{ color: "#0a0a0a" }] },
+          { elementType: "labels.text.stroke", stylers: [{ color: "#0a0a0a" }] },
+          { elementType: "labels.text.fill", stylers: [{ color: "#444" }] },
+          { featureType: "road", elementType: "geometry", stylers: [{ color: "#1a1a1a" }] },
+          { featureType: "water", elementType: "geometry", stylers: [{ color: "#060605" }] },
+          { featureType: "administrative", elementType: "geometry.stroke", stylers: [{ color: "#222" }] },
+        ],
+        disableDefaultUI: true,
+        zoomControl: true,
+      });
+      mapInstanceRef.current = map;
+
+      const cfg = STATUS_CONFIG[result.current_status || result.status] || { pct: 0 };
+
+      geocoder.geocode({ address: origin + ", USA" }, (res: any) => {
+        if (!res || !res[0]) return;
+        const originLatLng = res[0].geometry.location;
+        new window.google.maps.Marker({
+          position: originLatLng, map,
+          icon: { path: window.google.maps.SymbolPath.CIRCLE, scale: 8, fillColor: "#f97316", fillOpacity: 1, strokeColor: "#fff", strokeWeight: 2 },
+          title: origin,
+        });
+
+        geocoder.geocode({ address: destination + ", USA" }, (res2: any) => {
+          if (!res2 || !res2[0]) return;
+          const destLatLng = res2[0].geometry.location;
+          new window.google.maps.Marker({
+            position: destLatLng, map,
+            icon: { path: window.google.maps.SymbolPath.CIRCLE, scale: 8, fillColor: "#22c55e", fillOpacity: 1, strokeColor: "#fff", strokeWeight: 2 },
+            title: destination,
+          });
+
+          const pct = cfg.pct / 100;
+          const vehicleLat = originLatLng.lat() + (destLatLng.lat() - originLatLng.lat()) * pct;
+          const vehicleLng = originLatLng.lng() + (destLatLng.lng() - originLatLng.lng()) * pct;
+
+          new window.google.maps.Marker({
+            position: { lat: vehicleLat, lng: vehicleLng }, map,
+            label: { text: isAir ? "✈" : "🚚", fontSize: "20px" },
+            title: "Package location",
+          });
+
+          new window.google.maps.Polyline({
+            path: [originLatLng, destLatLng], map,
+            geodesic: true,
+            strokeColor: "#f97316",
+            strokeOpacity: 0.4,
+            strokeWeight: 2,
+          });
+
+          new window.google.maps.Polyline({
+            path: [originLatLng, { lat: vehicleLat, lng: vehicleLng }], map,
+            geodesic: true,
+            strokeColor: "#f97316",
+            strokeOpacity: 1,
+            strokeWeight: 3,
+          });
+
+          const bounds = new window.google.maps.LatLngBounds();
+          bounds.extend(originLatLng);
+          bounds.extend(destLatLng);
+          map.fitBounds(bounds, { padding: 60 });
+        });
+      });
+    };
+
+    if (window.google) {
+      loadMap();
+    } else {
+      window.initMap = loadMap;
+      const script = document.createElement("script");
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY}&callback=initMap`;
+      script.async = true;
+      document.head.appendChild(script);
+    }
+  }, [result]);
 
   async function doTrack() {
     if (!tracking.trim()) return;
     setLoading(true);
     setError(false);
     setResult(null);
-    const { data } = await supabase
-      .from("shipments")
-      .select("*")
-      .eq("tracking_number", tracking.trim())
-      .single();
+    const { data } = await supabase.from("shipments").select("*").eq("tracking_number", tracking.trim()).single();
     setLoading(false);
     if (!data) { setError(true); return; }
     setResult(data);
@@ -65,14 +150,11 @@ export default function Home() {
     nav: { position: "relative", zIndex: 10, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", borderBottom: "1px solid #1a1a17" },
     logo: { fontFamily: "'Syne', sans-serif", fontSize: 18, fontWeight: 800, color: "#f97316" },
     badge: { display: "flex", alignItems: "center", gap: 6, fontSize: 10, color: "#444", border: "1px solid #1a1a17", padding: "4px 10px", borderRadius: 99 },
-    dot: { width: 6, height: 6, borderRadius: "50%", background: "#22c55e" },
     hero: { position: "relative", zIndex: 10, textAlign: "center" as const, padding: "48px 16px 36px" },
     eyebrow: { display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 24 },
     eyeLine: { width: 24, height: 1, background: "#f97316" },
     eyeText: { fontSize: 9, letterSpacing: 2, textTransform: "uppercase" as const, color: "#444" },
     headline: { fontFamily: "'Syne', sans-serif", fontWeight: 800, lineHeight: 0.95, letterSpacing: -2, marginBottom: 12, fontSize: "clamp(44px,12vw,64px)" },
-    tagline: { fontSize: 15, fontWeight: 300, fontStyle: "italic" as const, color: "#555", marginBottom: 6 },
-    subtext: { fontSize: 12, color: "#333", marginBottom: 32, letterSpacing: 0.5, padding: "0 20px", lineHeight: 1.6 },
     searchWrap: { maxWidth: 520, margin: "0 auto 12px", padding: "0 4px" },
     searchBox: { background: "#0d0d0b", border: "1px solid #252521", borderRadius: 14, padding: "5px 5px 5px 16px", display: "flex", alignItems: "center", gap: 8 },
     input: { flex: 1, background: "none", border: "none", color: "#eeede6", fontSize: 14, fontFamily: "'DM Sans', sans-serif", padding: "10px 0", outline: "none", minWidth: 0 },
@@ -81,9 +163,9 @@ export default function Home() {
     divLine: { flex: 1, height: 1, background: "#1a1a17" },
     divDiamond: { width: 5, height: 5, background: "#f97316", transform: "rotate(45deg)" },
     stats: { display: "flex", maxWidth: 420, margin: "0 auto", border: "1px solid #1a1a17", borderRadius: 12, overflow: "hidden" },
-    stat: { flex: 1, padding: "12px 4px", textAlign: "center" as const, borderRight: "1px solid #1a1a17" },
+    stat: { flex: 1, padding: "12px 4px", textAlign: "center" as const },
     statNum: { fontFamily: "'Syne', sans-serif", fontSize: 16, fontWeight: 700, color: "#f97316" },
-    statLabel: { fontSize: 8, color: "#333", marginTop: 2, textTransform: "uppercase" as const, letterSpacing: 0.3 },
+    statLabel: { fontSize: 8, color: "#333", marginTop: 2, textTransform: "uppercase" as const },
     results: { position: "relative" as const, zIndex: 10, maxWidth: 580, margin: "0 auto", padding: "0 16px 60px" },
     sectionLabel: { textAlign: "center" as const, fontSize: 9, letterSpacing: 1.5, textTransform: "uppercase" as const, color: "#333", marginBottom: 14, marginTop: 32 },
     card: { background: "#0d0d0b", border: "1px solid #1a1a17", borderRadius: 16, padding: 20, marginBottom: 12 },
@@ -100,8 +182,6 @@ export default function Home() {
         @keyframes scan { 0% { top:-2px; } 100% { top:100vh; } }
         @keyframes rain { 0% { transform:translateY(-120px); opacity:0; } 10% { opacity:1; } 90% { opacity:0.5; } 100% { transform:translateY(110vh); opacity:0; } }
         @keyframes livePulse { 0%,100% { box-shadow:0 0 0 0 rgba(34,197,94,0.5); } 50% { box-shadow:0 0 0 4px rgba(34,197,94,0); } }
-        @keyframes vehicleMove { 0%,100% { transform: translateY(-2px); } 50% { transform: translateY(2px); } }
-        @keyframes dash { to { stroke-dashoffset: -20; } }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         input::placeholder { color: #333; font-size: 13px; }
         input:focus { outline: none; }
@@ -111,23 +191,20 @@ export default function Home() {
       <div style={s.glow} />
       <div style={s.scan} />
 
-      {/* RAIN */}
       <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0, overflow: "hidden" }}>
         {drops.map(d => (
           <div key={d.id} style={{ position: "absolute", left: d.left + "%", height: d.height, width: 1, background: "linear-gradient(transparent,rgba(249,115,22,0.35),transparent)", borderRadius: 99, opacity: d.opacity, animation: `rain ${d.duration}s ${d.delay}s linear infinite` }} />
         ))}
       </div>
 
-      {/* NAV */}
       <nav style={s.nav}>
         <div style={s.logo}>NextDayRoute</div>
         <div style={s.badge}>
-          <div style={{ ...s.dot, animation: "livePulse 2s ease infinite" }} />
+          <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#22c55e", animation: "livePulse 2s ease infinite" }} />
           All systems live
         </div>
       </nav>
 
-      {/* HERO */}
       <div style={s.hero}>
         <div style={s.eyebrow}>
           <div style={s.eyeLine} />
@@ -139,8 +216,8 @@ export default function Home() {
           <div style={{ color: "#f97316" }}>DAY</div>
           <div style={{ color: "#eeede6" }}>ROUTE</div>
         </div>
-        <div style={s.tagline}>King of the road.</div>
-        <div style={s.subtext}>Bulletproof delivery tracking — every mile, every update.</div>
+        <div style={{ fontSize: 15, fontWeight: 300, fontStyle: "italic", color: "#555", marginBottom: 6 }}>King of the road.</div>
+        <div style={{ fontSize: 12, color: "#333", marginBottom: 32, padding: "0 20px" }}>Bulletproof delivery tracking — every mile, every update.</div>
 
         <div style={s.searchWrap}>
           <div style={s.searchBox}>
@@ -148,7 +225,7 @@ export default function Home() {
             <input value={tracking} onChange={e => setTracking(e.target.value)} onKeyDown={e => e.key === "Enter" && doTrack()} placeholder="Enter tracking number..." style={s.input} />
             <button onClick={doTrack} style={s.btn}>{loading ? "..." : "Track →"}</button>
           </div>
-          {error && <div style={{ color: "#ef4444", fontSize: 12, marginTop: 10 }}>No shipment found. Check your tracking number.</div>}
+          {error && <div style={{ color: "#ef4444", fontSize: 12, marginTop: 10 }}>No shipment found.</div>}
         </div>
 
         <div style={s.divider}>
@@ -167,7 +244,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* RESULTS */}
       {result && (
         <div style={s.results}>
           <div style={s.sectionLabel}>— Shipment found —</div>
@@ -182,100 +258,26 @@ export default function Home() {
                   <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 18, fontWeight: 700, color: cfg.color }}>{status}</div>
                 </div>
               </div>
-              <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 42, fontWeight: 800, color: cfg.color, opacity: 0.8, lineHeight: 1 }}>{cfg.pct}%</div>
+              <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 42, fontWeight: 800, color: cfg.color, opacity: 0.8 }}>{cfg.pct}%</div>
             </div>
             <div style={{ height: 4, background: "rgba(0,0,0,0.3)", borderRadius: 99, overflow: "hidden" }}>
-              <div style={{ height: "100%", width: cfg.pct + "%", background: cfg.color, borderRadius: 99, transition: "width 1s ease" }} />
+              <div style={{ height: "100%", width: cfg.pct + "%", background: cfg.color, borderRadius: 99 }} />
             </div>
           </div>
 
-          {/* MAP CARD */}
+          {/* GOOGLE MAP */}
           <div style={s.card}>
-            <div style={s.cardLabel}>Live Route Map</div>
-            <div style={{ position: "relative", background: "#060605", borderRadius: 12, padding: "24px 20px", border: "1px solid #1a1a17", overflow: "hidden" }}>
-              
-              {/* MAP GRID */}
-              <div style={{ position: "absolute", inset: 0, backgroundImage: "linear-gradient(#1a1a17 1px,transparent 1px),linear-gradient(90deg,#1a1a17 1px,transparent 1px)", backgroundSize: "24px 24px", opacity: 0.6 }} />
-              
-              {/* MAP GLOW */}
-              <div style={{ position: "absolute", top: "50%", left: cfg.pct + "%", transform: "translate(-50%,-50%)", width: 120, height: 120, background: "radial-gradient(circle,rgba(249,115,22,0.15) 0%,transparent 70%)", pointerEvents: "none", transition: "left 1s ease" }} />
-
-              <div style={{ position: "relative", zIndex: 2 }}>
-                {/* CITY LABELS */}
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: "#f97316" }}>{result.origin || "Origin"}</div>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: "#22c55e" }}>{result.destination || "Destination"}</div>
-                </div>
-
-                {/* ROUTE LINE WITH VEHICLE */}
-                <div style={{ position: "relative", height: 60, display: "flex", alignItems: "center" }}>
-                  
-                  {/* DASHED BACKGROUND LINE */}
-                  <svg style={{ position: "absolute", width: "100%", height: 20, top: "50%", transform: "translateY(-50%)" }} viewBox="0 0 400 20" preserveAspectRatio="none">
-                    <line x1="0" y1="10" x2="400" y2="10" stroke="#1a1a17" strokeWidth="2" strokeDasharray="8,6" />
-                  </svg>
-
-                  {/* PROGRESS LINE */}
-                  <div style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)", height: 2, width: cfg.pct + "%", background: `linear-gradient(90deg, #f97316, ${cfg.color})`, borderRadius: 99, transition: "width 1s ease", boxShadow: `0 0 8px ${cfg.color}60` }} />
-
-                  {/* ORIGIN DOT */}
-                  <div style={{ position: "absolute", left: 0, top: "50%", transform: "translate(-50%,-50%)", width: 12, height: 12, borderRadius: "50%", background: "#f97316", boxShadow: "0 0 10px rgba(249,115,22,0.6)", zIndex: 3 }} />
-
-                  {/* DESTINATION DOT */}
-                  <div style={{ position: "absolute", right: 0, top: "50%", transform: "translate(50%,-50%)", width: 12, height: 12, borderRadius: "50%", background: status === "Delivered" ? "#22c55e" : "#333", border: "2px solid #22c55e", boxShadow: status === "Delivered" ? "0 0 10px rgba(34,197,94,0.6)" : "none", zIndex: 3, transition: "all 0.5s ease" }} />
-
-                  {/* VEHICLE */}
-                  <div style={{ position: "absolute", left: `calc(${Math.min(cfg.pct, 95)}% - 16px)`, top: "50%", transform: "translateY(-60%)", fontSize: 24, zIndex: 4, transition: "left 1s ease", animation: "vehicleMove 2s ease-in-out infinite", filter: `drop-shadow(0 0 6px ${cfg.color})` }}>
-                    {vehicle}
-                  </div>
-                </div>
-
-                {/* PROGRESS % */}
-                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
-                  <div style={{ fontSize: 9, color: "#333" }}>0%</div>
-                  <div style={{ fontSize: 10, color: cfg.color, fontWeight: 600 }}>{cfg.pct}% complete</div>
-                  <div style={{ fontSize: 9, color: "#333" }}>100%</div>
-                </div>
-
-                {/* CHECKPOINTS */}
-                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16, paddingTop: 16, borderTop: "1px solid #1a1a17" }}>
-                  {[
-                    { label: "Label Created", pct: 8 },
-                    { label: "Picked Up", pct: 22 },
-                    { label: "In Transit", pct: 45 },
-                    { label: "At Facility", pct: 62 },
-                    { label: "Out for Delivery", pct: 90 },
-                    { label: "Delivered", pct: 100 },
-                  ].map(cp => (
-                    <div key={cp.label} style={{ textAlign: "center", flex: 1 }}>
-                      <div style={{ width: 8, height: 8, borderRadius: "50%", margin: "0 auto 4px", background: cfg.pct >= cp.pct ? cfg.color : "#1a1a17", border: `1px solid ${cfg.pct >= cp.pct ? cfg.color : "#333"}`, transition: "all 0.5s ease" }} />
-                      <div style={{ fontSize: 7, color: cfg.pct >= cp.pct ? "#888" : "#333", lineHeight: 1.2 }}>{cp.label.split(" ")[0]}</div>
-                    </div>
-                  ))}
-                </div>
+            <div style={s.cardLabel}>📍 Live Route Map</div>
+            <div ref={mapRef} style={{ width: "100%", height: 280, borderRadius: 12, overflow: "hidden", background: "#0a0a0a" }} />
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#888" }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#f97316" }} />
+                {result.origin}
               </div>
-            </div>
-          </div>
-
-          {/* ROUTE */}
-          <div style={s.card}>
-            <div style={s.cardLabel}>Route</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#f97316", marginBottom: 6 }} />
-                <div style={{ fontSize: 14, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{result.origin || "—"}</div>
-                <div style={{ fontSize: 9, color: "#333", marginTop: 2, textTransform: "uppercase", letterSpacing: 0.5 }}>Origin</div>
-              </div>
-              <div style={{ flex: 2, minWidth: 0 }}>
-                <div style={{ height: 2, background: "#1a1a17", borderRadius: 99, overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: cfg.pct + "%", background: "#f97316" }} />
-                </div>
-                <div style={{ textAlign: "center", fontSize: 16, marginTop: -9 }}>{vehicle}</div>
-              </div>
-              <div style={{ flex: 1, minWidth: 0, textAlign: "right" }}>
-                <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#22c55e", marginBottom: 6, marginLeft: "auto" }} />
-                <div style={{ fontSize: 14, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{result.destination || "—"}</div>
-                <div style={{ fontSize: 9, color: "#333", marginTop: 2, textTransform: "uppercase", letterSpacing: 0.5 }}>Destination</div>
+              <div style={{ fontSize: 11, color: cfg.color }}>{vehicle} {cfg.pct}% complete</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#888" }}>
+                {result.destination}
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#22c55e" }} />
               </div>
             </div>
           </div>
@@ -287,19 +289,19 @@ export default function Home() {
               {[
                 ["Tracking #", result.tracking_number, true],
                 ["Status", status, false, true],
-                ["Service", result.service_type || "Standard", false],
-                ["Weight", result.package_weight ? result.package_weight + " kg" : "—", false],
+                ["Service", result.service_type || "Standard"],
+                ["Weight", result.package_weight ? result.package_weight + " kg" : "—"],
                 ["Est. Delivery", result.estimated_delivery_date || "—", false, true],
-                ["Origin", result.origin || "—", false],
-                ["Destination", result.destination || "—", false],
-                ["Sender", result.sender_name || "—", false],
-                ["Sender Email", result.sender_email || "—", false],
-                ["Sender Phone", result.sender_phone || "—", false],
-                ["Sender Address", result.sender_address || "—", false],
-                ["Receiver", result.receiver_name || "—", false],
-                ["Receiver Email", result.receiver_email || "—", false],
-                ["Receiver Phone", result.receiver_phone || "—", false],
-                ["Receiver Address", result.receiver_address || "—", false],
+                ["Origin", result.origin || "—"],
+                ["Destination", result.destination || "—"],
+                ["Sender", result.sender_name || "—"],
+                ["Sender Email", result.sender_email || "—"],
+                ["Sender Phone", result.sender_phone || "—"],
+                ["Sender Address", result.sender_address || "—"],
+                ["Receiver", result.receiver_name || "—"],
+                ["Receiver Email", result.receiver_email || "—"],
+                ["Receiver Phone", result.receiver_phone || "—"],
+                ["Receiver Address", result.receiver_address || "—"],
               ].map(([label, value, mono, highlight]) => (
                 <div key={label as string}>
                   <div style={s.dlabel}>{label}</div>
