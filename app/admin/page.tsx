@@ -1,162 +1,132 @@
 "use client";
 import { useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@supabase/supabase-js";
 
-const STATUS_CONFIG: any = {
-  "Label Created":       { pct: 8,   color: "#888780", emoji: "📋" },
-  "Picked Up":           { pct: 22,  color: "#f97316", emoji: "📦" },
-  "In Transit":          { pct: 45,  color: "#f97316", emoji: "🚚" },
-  "Arrived at Facility": { pct: 62,  color: "#f97316", emoji: "🏭" },
-  "Out for Delivery":    { pct: 90,  color: "#f97316", emoji: "🛵" },
-  "Delivered":           { pct: 100, color: "#22c55e", emoji: "✅" },
-  "On Hold":             { pct: 50,  color: "#d97706", emoji: "⏸️" },
-  "Exception":           { pct: 50,  color: "#dc2626", emoji: "⚠️" },
-};
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
-export default function Home() {
-  const [tracking, setTracking] = useState("");
-  const [result, setResult] = useState<any>(null);
-  const [error, setError] = useState(false);
+export default function Admin() {
+  const [form, setForm] = useState({
+    tracking_number: "",
+    sender_name: "",
+    sender_email: "",
+    sender_phone: "",
+    sender_address: "",
+    receiver_name: "",
+    receiver_email: "",
+    receiver_phone: "",
+    receiver_address: "",
+    origin: "",
+    destination: "",
+    service_type: "Standard",
+    package_weight: "",
+    estimated_delivery_date: "",
+    status: "Label Created",
+  });
+  const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
-  async function doTrack() {
-    if (!tracking.trim()) return;
+  async function createShipment() {
     setLoading(true);
-    setError(false);
-    setResult(null);
-    const { data } = await supabase
-      .from("shipments")
-      .select("*")
-      .eq("tracking_number", tracking.trim())
-      .single();
+    setErrorMsg("");
+    setSuccess(false);
+    const { error } = await supabase.from("shipments").insert([form]);
     setLoading(false);
-    if (!data) { setError(true); return; }
-    setResult(data);
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      setSuccess(true);
+      setForm({
+        tracking_number: "",
+        sender_name: "",
+        sender_email: "",
+        sender_phone: "",
+        sender_address: "",
+        receiver_name: "",
+        receiver_email: "",
+        receiver_phone: "",
+        receiver_address: "",
+        origin: "",
+        destination: "",
+        service_type: "Standard",
+        package_weight: "",
+        estimated_delivery_date: "",
+        status: "Label Created",
+      });
+    }
   }
 
-  const status = result?.current_status || result?.status || "Label Created";
-  const cfg = STATUS_CONFIG[status] || { pct: 0, color: "#888780", emoji: "📋" };
+  const fields = [
+    { key: "tracking_number", label: "Tracking Number" },
+    { key: "sender_name", label: "Sender Name" },
+    { key: "sender_email", label: "Sender Email" },
+    { key: "sender_phone", label: "Sender Phone" },
+    { key: "sender_address", label: "Sender Address" },
+    { key: "receiver_name", label: "Receiver Name" },
+    { key: "receiver_email", label: "Receiver Email" },
+    { key: "receiver_phone", label: "Receiver Phone" },
+    { key: "receiver_address", label: "Receiver Address" },
+    { key: "origin", label: "Origin City" },
+    { key: "destination", label: "Destination City" },
+    { key: "package_weight", label: "Package Weight (kg)" },
+    { key: "estimated_delivery_date", label: "Est. Delivery Date" },
+  ];
 
   return (
-    <main style={{ background: "#0a0a0a", minHeight: "100vh", color: "white", fontFamily: "'DM Sans', sans-serif" }}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Syne:wght@700;800&display=swap');`}</style>
+    <main style={{ background: "#060605", minHeight: "100vh", color: "#eeede6", fontFamily: "'DM Sans', sans-serif", padding: "40px 20px" }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap');`}</style>
 
-      {/* NAV */}
-      <nav style={{ padding: "18px 32px", borderBottom: "1px solid #1a1a1a", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ fontFamily: "'Syne', sans-serif", fontSize: "22px", fontWeight: 800, color: "#f97316" }}>NextDayRoute</div>
-        <div style={{ fontSize: "12px", color: "#444", display: "flex", alignItems: "center", gap: "6px" }}>
-          <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#22c55e" }} />
-          All systems live
-        </div>
-      </nav>
+      <div style={{ maxWidth: 600, margin: "0 auto" }}>
+        <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 28, fontWeight: 800, color: "#f97316", marginBottom: 4 }}>NextDayRoute</div>
+        <div style={{ color: "#444", fontSize: 14, marginBottom: 40 }}>Admin — Create Shipment</div>
 
-      {/* HERO */}
-      <div style={{ textAlign: "center", padding: "60px 20px 40px" }}>
-        <div style={{ fontSize: "11px", letterSpacing: "3px", textTransform: "uppercase", color: "#444", marginBottom: "20px" }}>Fast · Reliable · Discreet</div>
-        <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: "56px", fontWeight: 800, lineHeight: 1, marginBottom: "16px" }}>
-          <span style={{ color: "#f97316" }}>NEXT</span>DAY<br />ROUTE
-        </h1>
-        <p style={{ color: "#444", fontSize: "14px", marginBottom: "40px" }}>Know exactly where your package is, every mile of the journey.</p>
-
-        {/* SEARCH */}
-        <div style={{ maxWidth: "520px", margin: "0 auto" }}>
-          <div style={{ background: "#111", border: "1px solid #222", borderRadius: "14px", padding: "6px 6px 6px 20px", display: "flex", alignItems: "center", gap: "10px" }}>
-            <input
-              value={tracking}
-              onChange={e => setTracking(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && doTrack()}
-              placeholder="Enter tracking number..."
-              style={{ flex: 1, background: "none", border: "none", color: "white", fontSize: "15px", fontFamily: "'DM Sans', sans-serif", padding: "10px 0", outline: "none" }}
-            />
-            <button onClick={doTrack} style={{ background: "#f97316", color: "white", border: "none", borderRadius: "10px", padding: "12px 24px", fontSize: "14px", fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>
-              {loading ? "..." : "Track →"}
-            </button>
-          </div>
-          {error && <p style={{ color: "#ef4444", fontSize: "13px", marginTop: "10px" }}>No shipment found. Check your tracking number.</p>}
-        </div>
-
-        {/* STATS */}
-        <div style={{ display: "flex", justifyContent: "center", gap: "0", maxWidth: "400px", margin: "40px auto 0", border: "1px solid #1a1a1a", borderRadius: "12px", overflow: "hidden" }}>
-          {[["50K+","Packages"],["99.9%","Uptime"],["180+","Countries"]].map(([n, l]) => (
-            <div key={l} style={{ flex: 1, padding: "16px 8px", textAlign: "center", borderRight: "1px solid #1a1a1a" }}>
-              <div style={{ fontFamily: "'Syne', sans-serif", fontSize: "20px", fontWeight: 700, color: "#f97316" }}>{n}</div>
-              <div style={{ fontSize: "10px", color: "#444", marginTop: "2px", textTransform: "uppercase", letterSpacing: "0.5px" }}>{l}</div>
+        <div style={{ background: "#0d0d0b", border: "1px solid #1a1a17", borderRadius: 16, padding: 24 }}>
+          {fields.map(({ key, label }) => (
+            <div key={key} style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontSize: 10, color: "#444", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>{label}</label>
+              <input
+                value={(form as any)[key]}
+                onChange={e => setForm({ ...form, [key]: e.target.value })}
+                style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: "1px solid #1a1a17", background: "#111", color: "#eeede6", fontSize: 14, fontFamily: "'DM Sans', sans-serif", outline: "none" }}
+              />
             </div>
           ))}
+
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: "block", fontSize: 10, color: "#444", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Service Type</label>
+            <select value={form.service_type} onChange={e => setForm({ ...form, service_type: e.target.value })} style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: "1px solid #1a1a17", background: "#111", color: "#eeede6", fontSize: 14, fontFamily: "'DM Sans', sans-serif", outline: "none" }}>
+              <option>Standard</option>
+              <option>Express</option>
+              <option>Priority</option>
+              <option>Overnight</option>
+            </select>
+          </div>
+
+          <div style={{ marginBottom: 24 }}>
+            <label style={{ display: "block", fontSize: 10, color: "#444", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Status</label>
+            <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: "1px solid #1a1a17", background: "#111", color: "#eeede6", fontSize: 14, fontFamily: "'DM Sans', sans-serif", outline: "none" }}>
+              <option>Label Created</option>
+              <option>Picked Up</option>
+              <option>In Transit</option>
+              <option>Arrived at Facility</option>
+              <option>Out for Delivery</option>
+              <option>Delivered</option>
+              <option>On Hold</option>
+              <option>Exception</option>
+            </select>
+          </div>
+
+          <button onClick={createShipment} style={{ width: "100%", padding: "14px", background: "#f97316", color: "white", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "'Syne', sans-serif" }}>
+            {loading ? "Creating..." : "Create Shipment →"}
+          </button>
+
+          {errorMsg && <div style={{ color: "#ef4444", marginTop: 12, fontSize: 13 }}>{errorMsg}</div>}
+          {success && <div style={{ color: "#22c55e", marginTop: 12, fontSize: 13, textAlign: "center" }}>✅ Shipment created successfully!</div>}
         </div>
       </div>
-
-      {/* RESULT */}
-      {result && (
-        <div style={{ maxWidth: "600px", margin: "0 auto", padding: "0 20px 60px" }}>
-
-          {/* STATUS CARD */}
-          <div style={{ background: cfg.color + "10", border: "1px solid " + cfg.color + "30", borderRadius: "16px", padding: "24px", marginBottom: "16px" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-                <div style={{ fontSize: "36px" }}>{cfg.emoji}</div>
-                <div>
-                  <div style={{ fontSize: "11px", color: "#555", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "4px" }}>Current Status</div>
-                  <div style={{ fontFamily: "'Syne', sans-serif", fontSize: "22px", fontWeight: 700, color: cfg.color }}>{status}</div>
-                </div>
-              </div>
-              <div style={{ fontFamily: "'Syne', sans-serif", fontSize: "48px", fontWeight: 800, color: cfg.color, opacity: 0.8 }}>{cfg.pct}%</div>
-            </div>
-            <div style={{ height: "4px", background: "#1a1a1a", borderRadius: "99px", overflow: "hidden" }}>
-              <div style={{ height: "100%", width: cfg.pct + "%", background: cfg.color, borderRadius: "99px", transition: "width 1s ease" }} />
-            </div>
-          </div>
-
-          {/* ROUTE */}
-          <div style={{ background: "#111", border: "1px solid #1a1a1a", borderRadius: "16px", padding: "24px", marginBottom: "16px" }}>
-            <div style={{ fontSize: "11px", color: "#444", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "20px" }}>Route</div>
-            <div style={{ display: "flex", alignItems: "center" }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ width: "10px", height: "10px", borderRadius: "50%", background: "#f97316", marginBottom: "8px" }} />
-                <div style={{ fontSize: "16px", fontWeight: 600 }}>{result.origin || "—"}</div>
-                <div style={{ fontSize: "11px", color: "#444", marginTop: "2px" }}>Origin</div>
-              </div>
-              <div style={{ flex: 2, padding: "0 16px", position: "relative" }}>
-                <div style={{ height: "2px", background: "#1a1a1a", borderRadius: "99px" }}>
-                  <div style={{ height: "100%", width: cfg.pct + "%", background: "#f97316", borderRadius: "99px" }} />
-                </div>
-                <div style={{ textAlign: "center", fontSize: "20px", marginTop: "-12px" }}>✈</div>
-              </div>
-              <div style={{ flex: 1, textAlign: "right" }}>
-                <div style={{ width: "10px", height: "10px", borderRadius: "50%", background: "#22c55e", marginBottom: "8px", marginLeft: "auto" }} />
-                <div style={{ fontSize: "16px", fontWeight: 600 }}>{result.destination || "—"}</div>
-                <div style={{ fontSize: "11px", color: "#444", marginTop: "2px" }}>Destination</div>
-              </div>
-            </div>
-          </div>
-
-          {/* DETAILS */}
-          <div style={{ background: "#111", border: "1px solid #1a1a1a", borderRadius: "16px", padding: "24px" }}>
-            <div style={{ fontSize: "11px", color: "#444", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "20px" }}>Shipment Details</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-              {[
-                ["Tracking #", result.tracking_number],
-                ["Service", result.service_type || "Standard"],
-                ["Est. Delivery", result.estimated_delivery_date || "—"],
-                ["Weight", result.package_weight ? result.package_weight + " kg" : "—"],
-                ["Sender", result.sender_name || "—"],
-                ["Sender Email", result.sender_email || "—"],
-                ["Sender Phone", result.sender_phone || "—"],
-                ["Sender Address", result.sender_address || "—"],
-                ["Receiver", result.receiver_name || "—"],
-                ["Receiver Email", result.receiver_email || "—"],
-                ["Receiver Phone", result.receiver_phone || "—"],
-                ["Receiver Address", result.receiver_address || "—"],
-              ].map(([label, value]) => (
-                <div key={label}>
-                  <div style={{ fontSize: "10px", color: "#444", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "4px" }}>{label}</div>
-                  <div style={{ fontSize: "14px", color: "#ccc" }}>{value}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
     </main>
   );
 }
