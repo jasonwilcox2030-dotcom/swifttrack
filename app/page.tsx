@@ -27,7 +27,6 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [drops, setDrops] = useState<any[]>([]);
   const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<any>(null);
 
   useEffect(() => {
     const arr = Array.from({ length: 30 }, (_, i) => ({
@@ -42,6 +41,7 @@ export default function Home() {
     const origin = result.origin || "Los Angeles";
     const destination = result.destination || "New York";
     const isAir = ["Overnight", "Express"].includes(result.service_type);
+    const cfg = STATUS_CONFIG[result.current_status || result.status] || { pct: 0 };
 
     const loadMap = () => {
       const geocoder = new window.google.maps.Geocoder();
@@ -49,19 +49,19 @@ export default function Home() {
         zoom: 4,
         center: { lat: 39.5, lng: -98.35 },
         styles: [
-          { elementType: "geometry", stylers: [{ color: "#0a0a0a" }] },
-          { elementType: "labels.text.stroke", stylers: [{ color: "#0a0a0a" }] },
-          { elementType: "labels.text.fill", stylers: [{ color: "#444" }] },
-          { featureType: "road", elementType: "geometry", stylers: [{ color: "#1a1a1a" }] },
-          { featureType: "water", elementType: "geometry", stylers: [{ color: "#060605" }] },
-          { featureType: "administrative", elementType: "geometry.stroke", stylers: [{ color: "#222" }] },
+          { elementType: "geometry", stylers: [{ color: "#1a1a1a" }] },
+          { elementType: "labels.text.stroke", stylers: [{ color: "#1a1a1a" }] },
+          { elementType: "labels.text.fill", stylers: [{ color: "#aaaaaa" }] },
+          { featureType: "road", elementType: "geometry", stylers: [{ color: "#2a2a2a" }] },
+          { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#888" }] },
+          { featureType: "water", elementType: "geometry", stylers: [{ color: "#0d1a2a" }] },
+          { featureType: "administrative", elementType: "geometry.stroke", stylers: [{ color: "#444" }] },
+          { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#f97316" }] },
+          { featureType: "administrative.province", elementType: "labels.text.fill", stylers: [{ color: "#888" }] },
         ],
         disableDefaultUI: true,
         zoomControl: true,
       });
-      mapInstanceRef.current = map;
-
-      const cfg = STATUS_CONFIG[result.current_status || result.status] || { pct: 0 };
 
       geocoder.geocode({ address: origin + ", USA" }, (res: any) => {
         if (!res || !res[0]) return;
@@ -93,18 +93,12 @@ export default function Home() {
 
           new window.google.maps.Polyline({
             path: [originLatLng, destLatLng], map,
-            geodesic: true,
-            strokeColor: "#f97316",
-            strokeOpacity: 0.4,
-            strokeWeight: 2,
+            geodesic: true, strokeColor: "#f97316", strokeOpacity: 0.3, strokeWeight: 2,
           });
 
           new window.google.maps.Polyline({
             path: [originLatLng, { lat: vehicleLat, lng: vehicleLng }], map,
-            geodesic: true,
-            strokeColor: "#f97316",
-            strokeOpacity: 1,
-            strokeWeight: 3,
+            geodesic: true, strokeColor: "#f97316", strokeOpacity: 1, strokeWeight: 3,
           });
 
           const bounds = new window.google.maps.LatLngBounds();
@@ -248,7 +242,6 @@ export default function Home() {
         <div style={s.results}>
           <div style={s.sectionLabel}>— Shipment found —</div>
 
-          {/* STATUS */}
           <div style={{ ...s.card, background: cfg.color + "0d", border: "1px solid " + cfg.color + "30" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -265,10 +258,9 @@ export default function Home() {
             </div>
           </div>
 
-          {/* GOOGLE MAP */}
           <div style={s.card}>
             <div style={s.cardLabel}>📍 Live Route Map</div>
-            <div ref={mapRef} style={{ width: "100%", height: 280, borderRadius: 12, overflow: "hidden", background: "#0a0a0a" }} />
+            <div ref={mapRef} style={{ width: "100%", height: 280, borderRadius: 12, overflow: "hidden", background: "#1a1a1a" }} />
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#888" }}>
                 <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#f97316" }} />
@@ -282,7 +274,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* DETAILS */}
           <div style={s.card}>
             <div style={s.cardLabel}>Shipment Details</div>
             <div style={s.grid2}>
