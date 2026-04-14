@@ -16,7 +16,7 @@ export default function Home() {
 
     const { data, error } = await supabase
       .from("shipments")
-      .select("*, shipment_status_logs(*)")
+      .select("*")
       .eq("tracking_number", tracking.trim())
       .single();
 
