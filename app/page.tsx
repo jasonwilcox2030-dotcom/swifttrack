@@ -195,7 +195,7 @@ export default function Home() {
               {[["Tracking #", result.tracking_number],["Service", result.service_type],["Sender", result.sender_name],["Receiver", result.receiver_name],["Weight", result.package_weight + " kg"],["Est. delivery", result.estimated_delivery_date]].map(([l, v]) => (
                 <div key={l}>
                   <div style={{ fontSize: 9, color: "#28281f", textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 3 }}>{l}</div>
-                  <div style={{ fontSize: 13, color: l === "Est. delivery" ? "#f97316" : "#d0cfc8", fontFamily: l === "Tracking #" ? "monospace" : "inherit", fontSize: l === "Tracking #" ? 11 : 13 }}>{v}</div>
+            <div style={{ color: "#d0cfc8", fontFamily: l === "Tracking #" ? "monospace" : "inherit", fontSize: l === "Tracking #" ? 11 : 13 }}>
                 </div>
               ))}
             </div>
