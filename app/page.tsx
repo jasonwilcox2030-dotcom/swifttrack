@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
+import dynamic from "next/dynamic";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -14,9 +15,11 @@ const STATUS_CONFIG: any = {
   "Arrived at Facility": { pct: 62,  color: "#f97316", emoji: "🏭" },
   "Out for Delivery":    { pct: 90,  color: "#f97316", emoji: "🛵" },
   "Delivered":           { pct: 100, color: "#22c55e", emoji: "✅" },
-  "On Hold":             { pct: 50,  color: "#d97706", emoji: "⏸️" },
+  "On Hold":             { pct: 80,  color: "#d97706", emoji: "⏸️" },
   "Exception":           { pct: 50,  color: "#dc2626", emoji: "⚠️" },
 };
+
+const MapComponent = dynamic(() => import("../components/TrackingMap"), { ssr: false });
 
 export default function Home() {
   const [tracking, setTracking] = useState("");
@@ -93,6 +96,9 @@ export default function Home() {
         * { box-sizing: border-box; margin: 0; padding: 0; }
         input::placeholder { color: #333; font-size: 13px; }
         input:focus { outline: none; }
+        .leaflet-container { background: #1a1a1a !important; }
+        .leaflet-tile { filter: invert(1) hue-rotate(180deg) brightness(0.7) saturate(0.5); }
+        .leaflet-control-attribution { display: none; }
       `}</style>
 
       <div style={s.grid} />
@@ -164,6 +170,8 @@ export default function Home() {
                 <div>
                   <div style={{ fontSize: 9, color: "#333", textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 }}>Current Status</div>
                   <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 18, fontWeight: 700, color: cfg.color }}>{status}</div>
+                  {result.current_location && <div style={{ fontSize: 11, color: "#555", marginTop: 4 }}>📍 {result.current_location}</div>}
+                  {result.status_notes && <div style={{ fontSize: 11, color: "#444", marginTop: 4, fontStyle: "italic" }}>📝 {result.status_notes}</div>}
                 </div>
               </div>
               <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 42, fontWeight: 800, color: cfg.color, opacity: 0.8 }}>{cfg.pct}%</div>
@@ -173,52 +181,27 @@ export default function Home() {
             </div>
           </div>
 
-          {/* VISUAL MAP */}
+          {/* LEAFLET MAP */}
           <div style={s.card}>
-            <div style={s.cardLabel}>Live Route Map</div>
-            <div style={{ position: "relative", background: "#060605", borderRadius: 12, padding: "24px 20px", border: "1px solid #1a1a17", overflow: "hidden" }}>
-              <div style={{ position: "absolute", inset: 0, backgroundImage: "linear-gradient(#1a1a17 1px,transparent 1px),linear-gradient(90deg,#1a1a17 1px,transparent 1px)", backgroundSize: "24px 24px", opacity: 0.6 }} />
-              <div style={{ position: "absolute", top: "50%", left: cfg.pct + "%", transform: "translate(-50%,-50%)", width: 120, height: 120, background: "radial-gradient(circle,rgba(249,115,22,0.15) 0%,transparent 70%)", pointerEvents: "none", transition: "left 1s ease" }} />
-
-              <div style={{ position: "relative", zIndex: 2 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: "#f97316" }}>{result.origin || "Origin"}</div>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: "#22c55e" }}>{result.destination || "Destination"}</div>
-                </div>
-
-                <div style={{ position: "relative", height: 60, display: "flex", alignItems: "center" }}>
-                  <svg style={{ position: "absolute", width: "100%", height: 20, top: "50%", transform: "translateY(-50%)" }} viewBox="0 0 400 20" preserveAspectRatio="none">
-                    <line x1="0" y1="10" x2="400" y2="10" stroke="#1a1a17" strokeWidth="2" strokeDasharray="8,6" />
-                  </svg>
-                  <div style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)", height: 2, width: cfg.pct + "%", background: `linear-gradient(90deg, #f97316, ${cfg.color})`, borderRadius: 99, transition: "width 1s ease", boxShadow: `0 0 8px ${cfg.color}60` }} />
-                  <div style={{ position: "absolute", left: 0, top: "50%", transform: "translate(-50%,-50%)", width: 12, height: 12, borderRadius: "50%", background: "#f97316", boxShadow: "0 0 10px rgba(249,115,22,0.6)", zIndex: 3 }} />
-                  <div style={{ position: "absolute", right: 0, top: "50%", transform: "translate(50%,-50%)", width: 12, height: 12, borderRadius: "50%", background: status === "Delivered" ? "#22c55e" : "#333", border: "2px solid #22c55e", boxShadow: status === "Delivered" ? "0 0 10px rgba(34,197,94,0.6)" : "none", zIndex: 3 }} />
-                  <div style={{ position: "absolute", left: `calc(${Math.min(cfg.pct, 93)}% - 14px)`, top: "50%", transform: "translateY(-60%)", fontSize: 24, zIndex: 4, transition: "left 1s ease", animation: "vehicleFloat 2s ease-in-out infinite", filter: `drop-shadow(0 0 6px ${cfg.color})` }}>
-                    {vehicle}
-                  </div>
-                </div>
-
-                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
-                  <div style={{ fontSize: 9, color: "#333" }}>0%</div>
-                  <div style={{ fontSize: 10, color: cfg.color, fontWeight: 600 }}>{cfg.pct}% complete</div>
-                  <div style={{ fontSize: 9, color: "#333" }}>100%</div>
-                </div>
-
-                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16, paddingTop: 16, borderTop: "1px solid #1a1a17" }}>
-                  {[
-                    { label: "Label Created", pct: 8 },
-                    { label: "Picked Up", pct: 22 },
-                    { label: "In Transit", pct: 45 },
-                    { label: "At Facility", pct: 62 },
-                    { label: "Out for Delivery", pct: 90 },
-                    { label: "Delivered", pct: 100 },
-                  ].map(cp => (
-                    <div key={cp.label} style={{ textAlign: "center", flex: 1 }}>
-                      <div style={{ width: 8, height: 8, borderRadius: "50%", margin: "0 auto 4px", background: cfg.pct >= cp.pct ? cfg.color : "#1a1a17", border: `1px solid ${cfg.pct >= cp.pct ? cfg.color : "#333"}` }} />
-                      <div style={{ fontSize: 7, color: cfg.pct >= cp.pct ? "#888" : "#333", lineHeight: 1.2 }}>{cp.label.split(" ")[0]}</div>
-                    </div>
-                  ))}
-                </div>
+            <div style={s.cardLabel}>🗺️ Live Route Map</div>
+            <div style={{ borderRadius: 12, overflow: "hidden", height: 300 }}>
+              <MapComponent
+                origin={result.origin || ""}
+                destination={result.destination || ""}
+                pct={cfg.pct}
+                color={cfg.color}
+                vehicle={vehicle}
+              />
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#888" }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#f97316" }} />
+                {result.origin}
+              </div>
+              <div style={{ fontSize: 11, color: cfg.color }}>{vehicle} {cfg.pct}% complete</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#888" }}>
+                {result.destination}
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#22c55e" }} />
               </div>
             </div>
           </div>
@@ -230,15 +213,26 @@ export default function Home() {
               {[
                 ["Tracking #", result.tracking_number, true],
                 ["Status", status, false, true],
+                ["Current Location", result.current_location || "—"],
+                ["Status Notes", result.status_notes || "—"],
                 ["Service", result.service_type || "Standard"],
                 ["Weight", result.package_weight ? result.package_weight + " kg" : "—"],
+                ["Pieces", result.pieces || "—"],
+                ["Dimensions", result.dimensions || "—"],
+                ["Declared Value", result.declared_value ? "$" + result.declared_value : "—"],
+                ["Fragile", result.fragile ? "⚠️ Yes" : "No"],
+                ["Signature Required", result.signature_required ? "✅ Yes" : "No"],
                 ["Est. Delivery", result.estimated_delivery_date || "—", false, true],
                 ["Origin", result.origin || "—"],
                 ["Destination", result.destination || "—"],
+                ["Package Description", result.package_description || "—"],
+                ["Delivery Instructions", result.delivery_instructions || "—"],
+                ["Sender Company", result.sender_company || "—"],
                 ["Sender", result.sender_name || "—"],
                 ["Sender Email", result.sender_email || "—"],
                 ["Sender Phone", result.sender_phone || "—"],
                 ["Sender Address", result.sender_address || "—"],
+                ["Receiver Company", result.receiver_company || "—"],
                 ["Receiver", result.receiver_name || "—"],
                 ["Receiver Email", result.receiver_email || "—"],
                 ["Receiver Phone", result.receiver_phone || "—"],
